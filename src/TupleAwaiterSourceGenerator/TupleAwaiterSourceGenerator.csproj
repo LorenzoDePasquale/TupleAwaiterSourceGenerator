@@ -2,14 +2,29 @@
 
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
-        <IsPackable>false</IsPackable>
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
         <RootNamespace>TupleAwaiterSourceGenerator</RootNamespace>
-        <PackageId>TupleAwaiterSourceGenerator</PackageId>
     </PropertyGroup>
+    
+    <!-- Nuget Package -->
+    <PropertyGroup>
+        <IsPackable>true</IsPackable>
+        <PackageId>TupleAwaiterSourceGenerator</PackageId>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Authors>Lorenzo De Pasquale</Authors>
+        <Description>A source generator that generates the extension methods required to await on tuples of Task&lt;T&gt; and ValueTask&lt;T&gt;</Description>
+        <RepositoryUrl>https://github.com/LorenzoDePasquale/TupleAwaiterSourceGenerator</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReleaseNotes>Initial release</PackageReleaseNotes>
+    </PropertyGroup>
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="4.14.0">
