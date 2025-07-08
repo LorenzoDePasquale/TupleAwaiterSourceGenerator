@@ -1,0 +1,4 @@
+﻿<Solution>
+  <Project Path="src\TupleAwaiterSourceGenerator.Tests\TupleAwaiterSourceGenerator.Tests.csproj" Type="Classic C#" />
+  <Project Path="src\TupleAwaiterSourceGenerator\TupleAwaiterSourceGenerator.csproj" Type="Classic C#" />
+</Solution>
