@@ -2,16 +2,18 @@
 
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
+        <Version>1.0.1</Version>
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
         <RootNamespace>TupleAwaiterSourceGenerator</RootNamespace>
     </PropertyGroup>
-    
+
     <!-- Nuget Package -->
     <PropertyGroup>
         <IsPackable>true</IsPackable>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
         <PackageId>TupleAwaiterSourceGenerator</PackageId>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <Authors>Lorenzo De Pasquale</Authors>
@@ -23,6 +25,8 @@
         <PackageReleaseNotes>Initial release</PackageReleaseNotes>
     </PropertyGroup>
     <ItemGroup>
+        <!-- This is necessary when packing a source generator as a Nuget package -->
+        <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
         <None Include="..\..\README.md" Pack="true" PackagePath="\"/>
     </ItemGroup>
 
