@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -19,30 +18,58 @@ public class TupleAwaiterSourceGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var expressions = context.SyntaxProvider
-                                 .CreateSyntaxProvider((node, _) => IsTupleAwaitExpression(node), (ctx, _) => AnalyzeExpression(ctx))
+                                 .CreateSyntaxProvider((node, _) => IsAwaitTuple(node) || IsAwaitTupleWithConfigureAwait(node), (ctx, _) => AnalyzeExpression(ctx))
                                  .Where(taskTypes => taskTypes.Any())
                                  .Collect();
+
         context.RegisterSourceOutput(expressions, GenerateExtensionMethods);
     }
 
-    static bool IsTupleAwaitExpression(SyntaxNode node) => node is AwaitExpressionSyntax { Expression: TupleExpressionSyntax };
+    static bool IsAwaitTuple(SyntaxNode node)
+    {
+        // Matches nodes like await (task1, task2)
+        return node is AwaitExpressionSyntax { Expression: TupleExpressionSyntax };
+    }
+
+    static bool IsAwaitTupleWithConfigureAwait(SyntaxNode node)
+    {
+        // Matches nodes like await (task1, task2).ConfigureAwait(false)
+        return node is AwaitExpressionSyntax
+        {
+            Expression: InvocationExpressionSyntax
+            {
+                Expression: MemberAccessExpressionSyntax
+                {
+                    Name: IdentifierNameSyntax { Identifier.Text: "ConfigureAwait" },
+                    Expression: TupleExpressionSyntax
+                }
+            }
+        };
+    }
 
     static TaskType[] AnalyzeExpression(GeneratorSyntaxContext context)
     {
-        if (context.Node is not AwaitExpressionSyntax { Expression: TupleExpressionSyntax tupleExpression})
+        var tupleExpression = ((AwaitExpressionSyntax)context.Node).Expression switch
         {
-            return [];
-        }
+            TupleExpressionSyntax expression => expression,
+            InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Expression: TupleExpressionSyntax expression } } => expression,
+            _ => throw new ArgumentException() // This will never be thrown, it's here to make the compiler happy
+        };
 
-        TypeInfo[] tupleItemsType = tupleExpression.Arguments.Select(arg => context.SemanticModel.GetTypeInfo(arg.Expression)).ToArray();
+        TypeInfo[] tupleItemsTypes = tupleExpression.Arguments.Select(arg => context.SemanticModel.GetTypeInfo(arg.Expression)).ToArray();
 
+        return GetTaskTypes(tupleItemsTypes);
+    }
+
+    static TaskType[] GetTaskTypes(TypeInfo[] tupleItemsType)
+    {
         if (tupleItemsType.Length <= 1)
         {
             // Not a multi-item tuple
             return [];
         }
 
-        if (tupleItemsType.Any(typeInfo => typeInfo.Type is not INamedTypeSymbol { Name: "Task" or "ValueTask", TypeArguments.Length: 1 }))
+        if (tupleItemsType.Any(typeInfo => !IsGenericTaskOrValueTask(typeInfo)))
         {
             // The tuple contains items that are not a Task<T> or ValueTask<T>
             return [];
@@ -52,9 +79,11 @@ public class TupleAwaiterSourceGenerator : IIncrementalGenerator
         {
             "Task" => TaskType.Task,
             "ValueTask" => TaskType.ValueTask,
-            _ => throw new ArgumentOutOfRangeException() // This will never be thrown, it's here to make the compiler happy
+            _ => throw new ArgumentException() // This will never be thrown, it's here to make the compiler happy
         }).ToArray();
     }
+
+    static bool IsGenericTaskOrValueTask(TypeInfo typeInfo) => typeInfo.Type is INamedTypeSymbol { Name: "Task" or "ValueTask", TypeArguments.Length: 1 };
 
     static void GenerateExtensionMethods(SourceProductionContext context, ImmutableArray<TaskType[]> tuples)
     {
@@ -119,16 +148,25 @@ public class TupleAwaiterSourceGenerator : IIncrementalGenerator
 
     static string GenerateExtensionMethod(TaskType[] taskTypes)
     {
-        string returnType = $"Task{taskTypes.Length}Awaiter";
         string typeParams = string.Join(", ", taskTypes.Select((_, i) => $"T{i + 1}"));
         string taskTypeParams = string.Join(", ", taskTypes.Select((taskType, i) => $"{taskType}<T{i + 1}>"));
         string taskArray = string.Join(", ", taskTypes.Select((taskType, i) => taskType == TaskType.Task ? $"tasks.Item{i + 1}" : $"tasks.Item{i + 1}.AsTask()"));
 
         // lang=c#
         return $$"""
-            public static {{returnType}}<{{typeParams}}> GetAwaiter<{{typeParams}}>(this ({{taskTypeParams}}) tasks)
+            public static TupleTaskAwaiter<{{typeParams}}> GetAwaiter<{{typeParams}}>(this ({{taskTypeParams}}) tasks)
             {
-                return new {{returnType}}<{{typeParams}}>({{taskArray}});
+                return new TupleTaskAwaiter<{{typeParams}}>({{taskArray}}, ConfigureAwaitOptions.ContinueOnCapturedContext);
+            }
+
+            public static TupleConfiguredTaskAwaitable<{{typeParams}}> ConfigureAwait<{{typeParams}}>(this ({{taskTypeParams}}) tasks, bool continueOnCapturedContext)
+            {
+                return new TupleConfiguredTaskAwaitable<{{typeParams}}>({{taskArray}}, continueOnCapturedContext ? ConfigureAwaitOptions.ContinueOnCapturedContext : ConfigureAwaitOptions.None);
+            }
+
+            public static TupleConfiguredTaskAwaitable<{{typeParams}}> ConfigureAwait<{{typeParams}}>(this ({{taskTypeParams}}) tasks, ConfigureAwaitOptions options)
+            {
+                return new TupleConfiguredTaskAwaitable<{{typeParams}}>({{taskArray}}, options);
             }
         """;
     }
@@ -136,39 +174,50 @@ public class TupleAwaiterSourceGenerator : IIncrementalGenerator
     static string GenerateAwaiter(TaskType[] taskTypes)
     {
         IEnumerable<int> indices = Enumerable.Range(1, taskTypes.Length).ToArray();
-        string structName = $"Task{taskTypes.Length}Awaiter";
         string typeParams = string.Join(", ", indices.Select(i => $"T{i}"));
         string parameters = string.Join(", ", indices.Select(i => $"Task<T{i}> task{i}"));
-        string privateFields = string.Join("\n    ", indices.Select(i => $"Task<T{i}> _task{i};"));
+        string privateFields = $"readonly {string.Join("\n    readonly ", indices.Select(i => $"Task<T{i}> _task{i};"))}";
         string fieldAssignments = string.Join("\n        ", indices.Select(i => $"_task{i} = task{i};"));
-        string whenAllTaskCall = $"{string.Join(", ", indices.Select(i => $"task{i}"))}";
+        string whenAllArguments = $"{string.Join(", ", indices.Select(i => $"task{i}"))}";
+        string newAwaiterArguments = $"{string.Join(", ", indices.Select(i => $"_task{i}"))}";
         string resultTuple = string.Join(", ", indices.Select(i => $"_task{i}.Result"));
 
         // lang=c#
         return $$"""
-        public struct {{structName}}<{{typeParams}}> : INotifyCompletion
+        public readonly struct TupleTaskAwaiter<{{typeParams}}> : INotifyCompletion
         {
             {{privateFields}}
-            Task _whenAllTask;
-        
-            public {{structName}}({{parameters}})
+            readonly ConfiguredTaskAwaitable.ConfiguredTaskAwaiter _whenAllAwaiter;
+
+            internal TupleTaskAwaiter({{parameters}}, ConfigureAwaitOptions options)
             {
                 {{fieldAssignments}}
-                _whenAllTask = Task.WhenAll({{whenAllTaskCall}});
+                _whenAllAwaiter = Task.WhenAll({{whenAllArguments}}).ConfigureAwait(options).GetAwaiter();
             }
-        
-            public bool IsCompleted => _whenAllTask.IsCompleted;
-        
-            public void OnCompleted(Action continuation)
-            {
-                _whenAllTask.ConfigureAwait(false).GetAwaiter().OnCompleted(continuation);
-            }
-        
+
+            public bool IsCompleted => _whenAllAwaiter.IsCompleted;
+
+            public void OnCompleted(Action continuation) => _whenAllAwaiter.OnCompleted(continuation);
+
             public ({{typeParams}}) GetResult()
             {
-                _whenAllTask.GetAwaiter().GetResult();
+                _whenAllAwaiter.GetResult();
                 return ({{resultTuple}});
             }
+        }
+
+        public readonly struct TupleConfiguredTaskAwaitable<{{typeParams}}>
+        {
+            {{privateFields}}
+            readonly ConfigureAwaitOptions _options;
+
+            internal TupleConfiguredTaskAwaitable({{parameters}}, ConfigureAwaitOptions options)
+            {
+                {{fieldAssignments}}
+                _options = options;
+            }
+
+            public TupleTaskAwaiter<{{typeParams}}> GetAwaiter() => new({{newAwaiterArguments}}, _options);
         }
         """;
     }

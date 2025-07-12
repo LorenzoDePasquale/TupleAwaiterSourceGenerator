@@ -6,6 +6,7 @@ A C# source generator that enables directly awaiting on tuples of `Task<T>` and 
 
 - **Direct tuple awaiting**: Await tuples of tasks without explicit `Task.WhenAll()` calls
 - **Mixed task types**: Support for both `Task<T>` and `ValueTask<T>` in the same tuple
+- **Configurable awaiter**: Support for both `ConfigureAwait(bool)` and `ConfigureAwait(ConfigureAwaitOptions)`
 - **Type safety**: Preserves strong typing with proper generic constraints
 - **Zero runtime overhead**: Code generation at compile time with no runtime performance impact
 - **Automatic detection**: Generates extension methods only for tuple patterns actually used in your code
@@ -44,6 +45,14 @@ The generator supports mixing `Task<T>` and `ValueTask<T>` in the same tuple:
 var (result1, result2) = await ( /* Task */ Operation1(), /* ValueTask */ Operation2());
 ```
 
+It's also possible to configure the awaiter:
+
+```csharp 
+var (result1, result2) = await (Operation1(), Operation2()).ConfigureAwait(false);
+// ConfigureAwaitOptions is supported too
+var (result1, result2) = await (Operation1(), Operation2()).ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext);
+```
+
 ## How It Works
 
 The source generator:
@@ -55,10 +64,5 @@ The source generator:
 
 ## Requirements
 
-- .NET Standard 2.0 or higher
+- .NET 8.0 or higher
 - C# 9.0 or higher (for tuple syntax support)
-
-## Limitations
-
-- Cannot mix with non-task types in the same tuple
-- `ConfigureAwait` is set to `false` by default and can't be configured

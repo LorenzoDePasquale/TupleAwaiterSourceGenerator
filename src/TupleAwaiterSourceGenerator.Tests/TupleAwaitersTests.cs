@@ -11,7 +11,7 @@ public class TupleAwaitersTests
                                static async Task Method()
                                {
                                    (int n1, int n2) = await (GetValue(1), GetValue(2));
-                                   (int n3, int n4) = await (GetValue(3), GetValue(4));
+                                   (int n3, int n4) = await (GetValue(3), GetValue(4)).ConfigureAwait(false);
                                
                                    static Task<T> GetValue<T>(T number)
                                    {
@@ -28,31 +28,44 @@ public class TupleAwaitersTests
                                            using System.Runtime.CompilerServices;
                                            using System.Threading.Tasks;
 
-                                           public struct Task2Awaiter<T1, T2> : INotifyCompletion
+                                           public readonly struct TupleTaskAwaiter<T1, T2> : INotifyCompletion
                                            {
-                                               Task<T1> _task1;
-                                               Task<T2> _task2;
-                                               Task _whenAllTask;
+                                               readonly Task<T1> _task1;
+                                               readonly Task<T2> _task2;
+                                               readonly ConfiguredTaskAwaitable.ConfiguredTaskAwaiter _whenAllAwaiter;
                                            
-                                               public Task2Awaiter(Task<T1> task1, Task<T2> task2)
+                                               internal TupleTaskAwaiter(Task<T1> task1, Task<T2> task2, ConfigureAwaitOptions options)
                                                {
                                                    _task1 = task1;
                                                    _task2 = task2;
-                                                   _whenAllTask = Task.WhenAll(task1, task2);
+                                                   _whenAllAwaiter = Task.WhenAll(task1, task2).ConfigureAwait(options).GetAwaiter();
                                                }
                                            
-                                               public bool IsCompleted => _whenAllTask.IsCompleted;
+                                               public bool IsCompleted => _whenAllAwaiter.IsCompleted;
                                            
-                                               public void OnCompleted(Action continuation)
-                                               {
-                                                   _whenAllTask.ConfigureAwait(false).GetAwaiter().OnCompleted(continuation);
-                                               }
+                                               public void OnCompleted(Action continuation) => _whenAllAwaiter.OnCompleted(continuation);
                                            
                                                public (T1, T2) GetResult()
                                                {
-                                                   _whenAllTask.GetAwaiter().GetResult();
+                                                   _whenAllAwaiter.GetResult();
                                                    return (_task1.Result, _task2.Result);
                                                }
+                                           }
+                                           
+                                           public readonly struct TupleConfiguredTaskAwaitable<T1, T2>
+                                           {
+                                               readonly Task<T1> _task1;
+                                               readonly Task<T2> _task2;
+                                               readonly ConfigureAwaitOptions _options;
+                                           
+                                               internal TupleConfiguredTaskAwaitable(Task<T1> task1, Task<T2> task2, ConfigureAwaitOptions options)
+                                               {
+                                                   _task1 = task1;
+                                                   _task2 = task2;
+                                                   _options = options;
+                                               }
+                                           
+                                               public TupleTaskAwaiter<T1, T2> GetAwaiter() => new(_task1, _task2, _options);
                                            }
                                            
                                            

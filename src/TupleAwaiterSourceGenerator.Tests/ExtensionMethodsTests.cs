@@ -11,7 +11,7 @@ public class ExtensionMethodsTests
                                static async Task Method()
                                {
                                    (int n1, int n2) = await (GetValue(1), GetValueV(2));
-                                   (int n3, int n4) = await (GetValueV(3), GetValue(4));
+                                   (int n3, int n4) = await (GetValueV(3), GetValue(4)).ConfigureAwait(false);
                                
                                    static Task<T> GetValue<T>(T number)
                                    {
@@ -35,14 +35,34 @@ public class ExtensionMethodsTests
                                            
                                            public static class TupleAwaiterExtensions
                                            {
-                                               public static Task2Awaiter<T1, T2> GetAwaiter<T1, T2>(this (Task<T1>, ValueTask<T2>) tasks)
+                                               public static TupleTaskAwaiter<T1, T2> GetAwaiter<T1, T2>(this (Task<T1>, ValueTask<T2>) tasks)
                                                {
-                                                   return new Task2Awaiter<T1, T2>(tasks.Item1, tasks.Item2.AsTask());
+                                                   return new TupleTaskAwaiter<T1, T2>(tasks.Item1, tasks.Item2.AsTask(), ConfigureAwaitOptions.ContinueOnCapturedContext);
                                                }
                                            
-                                               public static Task2Awaiter<T1, T2> GetAwaiter<T1, T2>(this (ValueTask<T1>, Task<T2>) tasks)
+                                               public static TupleConfiguredTaskAwaitable<T1, T2> ConfigureAwait<T1, T2>(this (Task<T1>, ValueTask<T2>) tasks, bool continueOnCapturedContext)
                                                {
-                                                   return new Task2Awaiter<T1, T2>(tasks.Item1.AsTask(), tasks.Item2);
+                                                   return new TupleConfiguredTaskAwaitable<T1, T2>(tasks.Item1, tasks.Item2.AsTask(), continueOnCapturedContext ? ConfigureAwaitOptions.ContinueOnCapturedContext : ConfigureAwaitOptions.None);
+                                               }
+                                           
+                                               public static TupleConfiguredTaskAwaitable<T1, T2> ConfigureAwait<T1, T2>(this (Task<T1>, ValueTask<T2>) tasks, ConfigureAwaitOptions options)
+                                               {
+                                                   return new TupleConfiguredTaskAwaitable<T1, T2>(tasks.Item1, tasks.Item2.AsTask(), options);
+                                               }
+                                           
+                                               public static TupleTaskAwaiter<T1, T2> GetAwaiter<T1, T2>(this (ValueTask<T1>, Task<T2>) tasks)
+                                               {
+                                                   return new TupleTaskAwaiter<T1, T2>(tasks.Item1.AsTask(), tasks.Item2, ConfigureAwaitOptions.ContinueOnCapturedContext);
+                                               }
+                                           
+                                               public static TupleConfiguredTaskAwaitable<T1, T2> ConfigureAwait<T1, T2>(this (ValueTask<T1>, Task<T2>) tasks, bool continueOnCapturedContext)
+                                               {
+                                                   return new TupleConfiguredTaskAwaitable<T1, T2>(tasks.Item1.AsTask(), tasks.Item2, continueOnCapturedContext ? ConfigureAwaitOptions.ContinueOnCapturedContext : ConfigureAwaitOptions.None);
+                                               }
+                                           
+                                               public static TupleConfiguredTaskAwaitable<T1, T2> ConfigureAwait<T1, T2>(this (ValueTask<T1>, Task<T2>) tasks, ConfigureAwaitOptions options)
+                                               {
+                                                   return new TupleConfiguredTaskAwaitable<T1, T2>(tasks.Item1.AsTask(), tasks.Item2, options);
                                                }
                                            
                                            }
