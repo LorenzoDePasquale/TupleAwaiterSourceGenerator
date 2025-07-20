@@ -8,6 +8,7 @@
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
         <RootNamespace>TupleAwaiterSourceGenerator</RootNamespace>
+        <NoWarn>NU5128</NoWarn> <!-- NU5128 is a false positive with source generators -->
     </PropertyGroup>
 
     <!-- Nuget Package -->
@@ -16,7 +17,6 @@
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <PackageId>TupleAwaiterSourceGenerator</PackageId>
         <PackageTags>source generator async await tuple</PackageTags>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <Authors>Lorenzo De Pasquale</Authors>
         <Description>A source generator that generates the extension methods required to await on tuples of Task&lt;T&gt; and ValueTask&lt;T&gt;</Description>
         <RepositoryUrl>https://github.com/LorenzoDePasquale/TupleAwaiterSourceGenerator</RepositoryUrl>
