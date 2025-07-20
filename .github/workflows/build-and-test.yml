@@ -1,25 +1,47 @@
-name: Build and test
+name: Build and Test
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
+    paths-ignore:
+      - "**/*.gitignore"
+      - "**/*.gitattributes"
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
+    paths-ignore:
+      - "**/*.gitignore"
+      - "**/*.gitattributes"
+  workflow_dispatch:
 
 jobs:
-  build:
-
+  build-and-test:
+    name: Build and Test
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 9.0.x
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build --no-restore
-    - name: Test
-      run: dotnet test --no-build --verbosity normal
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Create NuGet package
+        run: dotnet pack --configuration Release --no-build --output ${{ github.workspace }}/artifacts/nuget
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ${{ github.workspace }}/artifacts/nuget/*.nupkg
+          retention-days: 7
