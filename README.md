@@ -11,14 +11,6 @@ A C# source generator that enables directly awaiting on tuples of `Task<T>` and 
 - **Zero runtime overhead**: Code generation at compile time with no runtime performance impact
 - **Automatic detection**: Generates extension methods only for tuple patterns actually used in your code
 
-## Installation
-
-Add the source generator to your project:
-
-```xml 
-<PackageReference Include="TupleAwaiterSourceGenerator" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-```
-
 ## Usage
 
 Instead of writing:

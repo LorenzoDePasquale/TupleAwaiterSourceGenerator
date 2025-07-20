@@ -15,6 +15,7 @@
         <IsPackable>true</IsPackable>
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <PackageId>TupleAwaiterSourceGenerator</PackageId>
+        <PackageTags>source generator async await tuple</PackageTags>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <Authors>Lorenzo De Pasquale</Authors>
         <Description>A source generator that generates the extension methods required to await on tuples of Task&lt;T&gt; and ValueTask&lt;T&gt;</Description>
